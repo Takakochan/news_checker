@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "News Checker",
+  "version": "1.0.0",
+  "description": "ハイライトしたテキストをTavily検索とLLMでファクトチェックします。",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://localhost:8787/*"],
+  "action": {
+    "default_title": "News Checker",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ]
+}

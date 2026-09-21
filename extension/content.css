@@ -1,0 +1,90 @@
+#news-checker-btn {
+  position: absolute;
+  z-index: 2147483647;
+  background: #1a73e8;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: -apple-system, sans-serif;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+#news-checker-panel {
+  position: absolute;
+  z-index: 2147483647;
+  width: 380px;
+  max-height: 480px;
+  overflow-y: auto;
+  background: #fff;
+  color: #202124;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  font-family: -apple-system, sans-serif;
+  font-size: 13px;
+  padding: 14px;
+}
+
+#news-checker-panel h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+#news-checker-panel .nc-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 11px;
+  color: #fff;
+  margin-right: 6px;
+}
+
+#news-checker-panel .nc-badge.low { background: #34a853; }
+#news-checker-panel .nc-badge.medium { background: #fbbc04; color: #202124; }
+#news-checker-panel .nc-badge.high { background: #ea4335; }
+
+#news-checker-panel .nc-settings {
+  background: #f1f3f4;
+  border-radius: 6px;
+  padding: 8px;
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#news-checker-panel .nc-source {
+  border-top: 1px solid #eee;
+  padding: 8px 0;
+}
+
+#news-checker-panel .nc-source a {
+  color: #1a73e8;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+#news-checker-panel .nc-score {
+  float: right;
+  background: #e8eaed;
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+}
+
+#news-checker-panel .nc-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  cursor: pointer;
+  color: #5f6368;
+  font-size: 16px;
+  background: none;
+  border: none;
+}
+
+#news-checker-panel .nc-loading {
+  color: #5f6368;
+}
