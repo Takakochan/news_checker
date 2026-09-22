@@ -5,6 +5,8 @@ LLMとTavily検索を使ってテキストをファクトチェックするサ�
 - **Chrome拡張機能**: Webページ上でハイライトしたテキストをその場でチェック。**ローカルのバックエンドのみに接続する設定のまま**（後述）
 - **iPhone向けWebアプリ**（`/app`）: 本番バックエンド（Render）に接続。ホーム画面に追加してアプリのように使える。スクリーンショットからのテキスト抽出（OCR）にも対応
 
+いずれのUIも、重要度バッジと**Truth score（真実度スコア、0〜100%）**バッジ、要約、情報源一覧を表示する。デザインはセリフ体の見出し＋温かみのある配色で、幅広い年齢層が読みやすいよう文字サイズ・タップ領域を大きめにしている。表示は英語で統一。
+
 ## 仕組み
 
 1. テキストが送られると、LLM（Nebius Token Factory経由）がテキストの**重要度・深刻度**（low / medium / high）を判定
@@ -13,7 +15,8 @@ LLMとTavily検索を使ってテキストをファクトチェックするサ�
    - 重要度が低い → 軽い検索（`basic`）、少なめの検索結果数、高めのスコア閾値
 3. 決定した設定でTavily検索APIを呼び出し、関連情報源を取得（各結果に関連性スコア0.0〜1.0が付く）
 4. LLMが検索結果を踏まえてファクトチェックの要約を生成
-5. 結果をSQLiteに保存し、`result_id` / `result_url`（`/result/{id}`）を含めてレスポンスを返す
+5. LLMが要約と情報源を踏まえて**真実度スコア（Truth score, 0〜100%）**を判定
+6. 結果をSQLiteに保存し、`result_id` / `result_url`（`/result/{id}`）を含めてレスポンスを返す
 
 ## 本番環境
 
@@ -28,7 +31,7 @@ LLMとTavily検索を使ってテキストをファクトチェックするサ�
 news_checker/
 ├── backend/
 │   ├── main.py            # APIエンドポイント (/check, /result/{id}, /app, /models, /health)
-│   ├── llm.py              # LLM呼び出し（重要度判定・要約生成）
+│   ├── llm.py              # LLM呼び出し（重要度判定・要約生成・真実度スコア判定）
 │   ├── tavily_client.py    # Tavily検索API呼び出し
 │   ├── db.py                # SQLiteへの結果保存・取得
 │   ├── models.py            # リクエスト/レスポンスのPydanticモデル
@@ -39,8 +42,8 @@ news_checker/
 │   ├── manifest.json
 │   ├── background.js         # service worker。/checkの実際のfetchはここで行う
 │   ├── config.js             # バックエンドURL・トークンの読み書き（storage.sync）
-│   ├── content.js             # テキスト選択の検知とUI表示、background.jsへメッセージ送信
-│   ├── content.css
+│   ├── content.js             # テキスト選択の検知とUI表示（/app・/resultと同じデザイン言語）、background.jsへメッセージ送信
+│   ├── content.css            # ポップアップパネルのスタイル。/app・/resultと共通のセリフ体+温かみのある配色
 │   ├── options.html / options.js  # 設定画面（モデル・Tavily設定・バックエンドURL/トークン）
 │   └── popup.html / popup.js
 ├── passenger_wsgi.py       # 未使用。cPanel(Passenger)向けに作ったが、mixhostがPython App非対応のため本番はRenderへ移行済み
@@ -132,7 +135,8 @@ Renderの無料プランは一定時間アクセスがないとスリープす�
 
 - 認証: `Authorization: Bearer <DEMO_TOKEN>` 必須（一致しないと401）
 - リクエスト: `{ text, model?, max_results?, auto_score?, score_threshold? }`
-- レスポンス: `{ severity, severity_reasoning, tavily_settings, summary, sources[], token_usage, result_id, result_url }`
+- レスポンス: `{ severity, severity_reasoning, tavily_settings, summary, truth_score, sources[], token_usage, result_id, result_url }`
+- `truth_score`: 0〜100の整数。対象文章の**具体的な主張**が情報源にどれだけ裏付けられているかを表す（「話題が報じられているか」ではなく「主張の中身が確認されているか」を採点するようプロンプトで明示している。過去に前者と混同して未確認情報に95%が付く不具合があり修正済み、詳細は後述）
 - 呼び出しのたびに結果をSQLiteに保存し、`result_id`（一意なID）と`result_url`（`/result/{id}`への完全URL）を返す
 
 ### `GET /result/{id}`
@@ -207,6 +211,16 @@ GitHubリポジトリの `master` ブランチにpushすると、Renderが自動
 - リポジトリ: `Takakochan/news_checker`（private）
 - Render用にGitHub OAuth連携を許可済み（Renderダッシュボードから作成したWeb Service経由）
 - 当初mixhost向けに作成したSSHデプロイ鍵（`news_checker_deploy`、cPanelの「SSH アクセス」で生成）やGitHub Deploy Key、Fine-grained Personal Access Token（"cPanel news_checker deploy (read-only)"）はcPanelデプロイを断念した後も残っている。使う予定がなければcPanel側のSSHキー、GitHub側のDeploy KeyとPATは削除して整理してよい
+
+## Truth scoreの既知の問題と修正履歴
+
+初回実装時、`truth_score`が「情報源がその話題・出来事を報じているか」を採点してしまい、「対象文章の具体的な主張（原因・正体など）が確認されているか」とは別物であることを区別できていなかった。
+
+例: テヘラン上空の謎の発光体についての文章で、要約は「正体は未確認」「当局の公式発表なし」「証拠は決定的ではない」と結論づけているにもかかわらず、`truth_score`が95%になっていた（情報源がこの目撃情報自体を複数報じていたことをもって高評価してしまっていた）。
+
+`backend/llm.py` の `TRUTH_SCORE_SYSTEM_PROMPT` を修正し、「出来事が報じられている事実」と「対象文章の具体的な主張が確認されているか」を明示的に区別し、未確認・憶測の内容は40〜59の範囲に収まるよう採点基準を明文化した。修正後は同じ文章で55%程度になることを確認済み。プロンプトを変更する際は、この区別を崩さないよう注意する。
+
+なお `judge_severity` と `summarize_fact_check` のプロンプト・ロジックは、ユーザーからの要望により変更していない。`truth_score` は別関数 `score_truth` として独立させてある。
 
 ## 注意点
 
