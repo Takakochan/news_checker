@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="News Checker"/>
+<title>News Checker</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 16px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    color: #1c1c1e;
+    background: #f2f2f7;
+  }
+  h1 { font-size: 20px; margin: 8px 0 16px; }
+  textarea {
+    width: 100%;
+    min-height: 120px;
+    font-size: 16px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #d1d1d6;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    resize: vertical;
+    font-family: inherit;
+  }
+  button {
+    width: 100%;
+    margin-top: 12px;
+    padding: 14px;
+    font-size: 17px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    background: #007aff;
+    color: #fff;
+    cursor: pointer;
+  }
+  button:disabled { background: #a8a8ac; }
+  .block {
+    margin-top: 16px;
+    padding: 14px;
+    background: #fff;
+    border-radius: 10px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .badge.low { background: #34c759; }
+  .badge.medium { background: #ff9500; }
+  .badge.high { background: #ff3b30; }
+  .label { font-weight: 600; font-size: 13px; color: #6e6e73; margin-bottom: 4px; }
+  .source { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e5ea; }
+  .source a { color: #007aff; text-decoration: none; font-weight: 600; word-break: break-all; }
+  .score { font-size: 12px; color: #6e6e73; }
+  .excerpt { font-size: 13px; color: #3c3c43; margin-top: 4px; }
+  .error { color: #ff3b30; margin-top: 16px; }
+  a.result-link { display: inline-block; margin-top: 12px; color: #007aff; text-decoration: none; font-weight: 600; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #000; color: #f2f2f7; }
+    textarea { background: #1c1c1e; color: #f2f2f7; border-color: #3a3a3c; }
+    .block { background: #1c1c1e; }
+    .source { border-top-color: #2c2c2e; }
+  }
+</style>
+</head>
+<body>
+  <h1>News Checker</h1>
+  <textarea id="text" placeholder="ファクトチェックしたい文章を貼り付け"></textarea>
+  <button id="submit">Fact Check</button>
+  <div id="result"></div>
+
+<script>
+const BACKEND_URL = "__BACKEND_URL__";
+const TOKEN = "__DEMO_TOKEN__";
+
+const textEl = document.getElementById("text");
+const submitEl = document.getElementById("submit");
+const resultEl = document.getElementById("result");
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function severityLabel(severity) {
+  const map = { low: "重要度: 低", medium: "重要度: 中", high: "重要度: 高" };
+  return map[severity] || severity;
+}
+
+async function runCheck() {
+  const text = textEl.value.trim();
+  if (!text) return;
+
+  submitEl.disabled = true;
+  submitEl.textContent = "確認中...";
+  resultEl.innerHTML = "";
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/check`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${TOKEN}`,
+      },
+      body: JSON.stringify({ text }),
+    });
+    if (!response.ok) {
+      throw new Error(`サーバーエラー: ${response.status}`);
+    }
+    const data = await response.json();
+    renderResult(data);
+  } catch (err) {
+    resultEl.innerHTML = `<div class="error">${escapeHtml(err.message || "通信エラーが発生しました。")}</div>`;
+  } finally {
+    submitEl.disabled = false;
+    submitEl.textContent = "Fact Check";
+  }
+}
+
+function renderResult(data) {
+  const sourcesHtml = data.sources
+    .map(
+      (s) => `
+      <div class="source">
+        <div class="score">score ${s.score.toFixed(2)}</div>
+        <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.title || s.url)}</a>
+        <div class="excerpt">${escapeHtml((s.content || "").slice(0, 160))}...</div>
+      </div>`
+    )
+    .join("");
+
+  resultEl.innerHTML = `
+    <div class="block">
+      <span class="badge ${data.severity}">${severityLabel(data.severity)}</span>
+      <div style="margin-top:8px;">${escapeHtml(data.severity_reasoning)}</div>
+    </div>
+    <div class="block">
+      <div class="label">要約</div>
+      <div>${escapeHtml(data.summary).replace(/\n/g, "<br/>")}</div>
+    </div>
+    <div class="block">
+      <div class="label">情報源</div>
+      ${sourcesHtml || "<div>情報源なし</div>"}
+    </div>
+    <a class="result-link" href="${escapeHtml(data.result_url)}" target="_blank" rel="noopener noreferrer">結果ページを開く &rarr;</a>
+  `;
+}
+
+submitEl.addEventListener("click", runCheck);
+</script>
+</body>
+</html>

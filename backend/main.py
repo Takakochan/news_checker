@@ -4,6 +4,7 @@ load_dotenv()
 
 import html
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +21,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/app", response_class=HTMLResponse)
+def app_page(request: Request) -> HTMLResponse:
+    template = (STATIC_DIR / "app.html").read_text(encoding="utf-8")
+    backend_url = str(request.base_url).rstrip("/")
+    demo_token = os.environ.get("DEMO_TOKEN", "")
+    html_content = template.replace("__BACKEND_URL__", backend_url).replace("__DEMO_TOKEN__", demo_token)
+    return HTMLResponse(content=html_content)
 
 
 def require_auth(authorization: str = Header(default=None)) -> None:
