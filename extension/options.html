@@ -31,7 +31,8 @@
         margin-top: 4px;
       }
       select,
-      input[type="number"] {
+      input[type="number"],
+      input[type="text"] {
         width: 100%;
         padding: 6px 8px;
         font-size: 13px;
@@ -92,9 +93,22 @@
       </div>
     </div>
 
+    <div class="field">
+      <label for="backend-url">Backend URL</label>
+      <input type="text" id="backend-url" placeholder="https://example.com" />
+      <div class="hint">Base URL of the News Checker backend (no trailing slash).</div>
+    </div>
+
+    <div class="field">
+      <label for="backend-token">Backend Token</label>
+      <input type="text" id="backend-token" placeholder="Bearer token" />
+      <div class="hint">Sent as Authorization: Bearer &lt;token&gt; to the backend.</div>
+    </div>
+
     <button id="save">Save</button>
     <div id="status"></div>
 
+    <script src="config.js"></script>
     <script src="options.js"></script>
   </body>
 </html>

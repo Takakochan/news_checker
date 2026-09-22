@@ -38,3 +38,5 @@ class CheckResponse(BaseModel):
     summary: str
     sources: list[SourceResult]
     token_usage: TokenUsage
+    result_id: str
+    result_url: str

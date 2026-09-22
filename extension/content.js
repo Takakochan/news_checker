@@ -1,5 +1,3 @@
-const API_URL = "http://localhost:8787/check";
-
 let checkButton = null;
 let panel = null;
 
@@ -106,6 +104,7 @@ function renderResultPanel(data, rect) {
       <strong>Token Usage</strong><br/>
       prompt: ${data.token_usage.prompt_tokens} / completion: ${data.token_usage.completion_tokens} / total: ${data.token_usage.total_tokens}
     </div>
+    ${data.result_url ? `<div style="margin-top:8px;"><a href="${escapeHtml(data.result_url)}" target="_blank" rel="noopener noreferrer">View result page</a></div>` : ""}
   `;
   panel.querySelector(".nc-close").addEventListener("click", removePanel);
   document.body.appendChild(panel);
@@ -153,14 +152,14 @@ async function runFactCheck(text, rect) {
 
   try {
     const settings = await getSettings();
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, ...settings }),
+    const result = await chrome.runtime.sendMessage({
+      type: "FACT_CHECK",
+      payload: { text, ...settings },
     });
-    if (!response.ok) throw new Error(`Server error: ${response.status}`);
-    const data = await response.json();
-    renderResultPanel(data, rect);
+    if (!result || !result.ok) {
+      throw new Error((result && result.error) || "A network error occurred.");
+    }
+    renderResultPanel(result.data, rect);
   } catch (err) {
     renderErrorPanel(err.message || "A network error occurred.", rect);
   }

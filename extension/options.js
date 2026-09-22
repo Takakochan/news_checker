@@ -1,10 +1,9 @@
-const API_BASE = "http://localhost:8787";
-
 const DEFAULTS = {
   model: null,
   maxResults: null,
   autoScore: true,
   scoreThreshold: 0.3,
+  ...CONFIG_DEFAULTS,
 };
 
 const modelSelect = document.getElementById("model-select");
@@ -13,6 +12,8 @@ const autoScoreCheckbox = document.getElementById("auto-score");
 const scoreThresholdRow = document.getElementById("score-threshold-row");
 const scoreThresholdInput = document.getElementById("score-threshold");
 const scoreThresholdValue = document.getElementById("score-threshold-value");
+const backendUrlInput = document.getElementById("backend-url");
+const backendTokenInput = document.getElementById("backend-token");
 const statusEl = document.getElementById("status");
 
 function updateScoreRowState() {
@@ -21,7 +22,8 @@ function updateScoreRowState() {
 
 async function loadModels(selected) {
   try {
-    const res = await fetch(`${API_BASE}/models`);
+    const { backendUrl } = await getBackendConfig();
+    const res = await fetch(`${backendUrl}/models`);
     const data = await res.json();
     modelSelect.innerHTML = "";
     for (const id of data.models) {
@@ -43,6 +45,8 @@ async function loadSettings() {
   autoScoreCheckbox.checked = stored.autoScore;
   scoreThresholdInput.value = stored.scoreThreshold;
   scoreThresholdValue.textContent = Number(stored.scoreThreshold).toFixed(2);
+  backendUrlInput.value = stored.backendUrl;
+  backendTokenInput.value = stored.backendToken;
   updateScoreRowState();
 }
 
@@ -58,6 +62,8 @@ document.getElementById("save").addEventListener("click", async () => {
     maxResults: maxResultsInput.value ? parseInt(maxResultsInput.value, 10) : null,
     autoScore: autoScoreCheckbox.checked,
     scoreThreshold: parseFloat(scoreThresholdInput.value),
+    backendUrl: (backendUrlInput.value || CONFIG_DEFAULTS.backendUrl).replace(/\/$/, ""),
+    backendToken: backendTokenInput.value,
   };
   await chrome.storage.sync.set(settings);
   statusEl.textContent = "Saved!";

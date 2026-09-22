@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "description": "ハイライトしたテキストをTavily検索とLLMでファクトチェックします。",
   "permissions": ["activeTab", "scripting", "storage"],
-  "host_permissions": ["http://localhost:8787/*"],
+  "host_permissions": ["http://localhost:8787/*", "https://example.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_title": "News Checker",
     "default_popup": "popup.html"
