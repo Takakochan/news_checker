@@ -36,6 +36,7 @@ class CheckResponse(BaseModel):
     severity_reasoning: str
     tavily_settings: TavilySettings
     summary: str
+    truth_score: int
     sources: list[SourceResult]
     token_usage: TokenUsage
     result_id: str

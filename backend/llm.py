@@ -50,6 +50,44 @@ SUMMARY_SYSTEM_PROMPT = """あなたはファクトチェックのアシスタ�
 情報源に基づかない推測は避け、根拠が不十分な場合はその旨を明記してください。
 """
 
+TRUTH_SCORE_SYSTEM_PROMPT = """あなたはファクトチェックのアシスタントです。
+ユーザーがハイライトした文章と、Web検索で得られた情報源、およびそれらを踏まえた要約を読み、
+その文章がどれだけ事実として正確かを0から100の真実度スコアで採点してください。
+
+- 100に近いほど、情報源に強く裏付けられた正確な内容
+- 0に近いほど、情報源によって明確に否定される、または誤りである内容
+- 情報源が不十分で判断できない場合は40から60の範囲で、その旨がわかるようにしてください
+
+以下のJSON形式のみで出力してください（説明文は不要）:
+{
+  "truth_score": 0から100の整数
+}
+"""
+
+
+def score_truth(text: str, sources: list[dict], summary: str, model: Optional[str] = None) -> tuple[int, dict]:
+    model = model or DEFAULT_MODEL
+    client = get_client()
+    sources_text = "\n\n".join(
+        f"[{s['title']}]({s['url']}) score={s['score']:.2f}\n{s['content'][:500]}"
+        for s in sources
+    )
+    user_content = f"対象文章: {text}\n\n検索結果:\n{sources_text}\n\n要約: {summary}"
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": TRUTH_SCORE_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.2,
+        response_format={"type": "json_object"},
+    )
+    log_usage("score_truth", model, response.usage)
+    usage = response.usage.model_dump()
+    result = json.loads(response.choices[0].message.content)
+    score = int(result["truth_score"])
+    return max(0, min(100, score)), usage
+
 
 def judge_severity(text: str, model: Optional[str] = None) -> tuple[dict, dict]:
     model = model or DEFAULT_MODEL

@@ -85,11 +85,12 @@ def check(req: CheckRequest, request: Request, authorization: str = Header(defau
     ]
 
     summary, summary_usage = llm.summarize_fact_check(text, raw_sources, model=req.model)
+    truth_score, truth_score_usage = llm.score_truth(text, raw_sources, summary, model=req.model)
 
     total_usage = TokenUsage(
-        prompt_tokens=severity_usage["prompt_tokens"] + summary_usage["prompt_tokens"],
-        completion_tokens=severity_usage["completion_tokens"] + summary_usage["completion_tokens"],
-        total_tokens=severity_usage["total_tokens"] + summary_usage["total_tokens"],
+        prompt_tokens=severity_usage["prompt_tokens"] + summary_usage["prompt_tokens"] + truth_score_usage["prompt_tokens"],
+        completion_tokens=severity_usage["completion_tokens"] + summary_usage["completion_tokens"] + truth_score_usage["completion_tokens"],
+        total_tokens=severity_usage["total_tokens"] + summary_usage["total_tokens"] + truth_score_usage["total_tokens"],
     )
 
     tavily_settings = TavilySettings(
@@ -106,6 +107,7 @@ def check(req: CheckRequest, request: Request, authorization: str = Header(defau
             "severity_reasoning": severity_result["severity_reasoning"],
             "tavily_settings": tavily_settings.model_dump(),
             "summary": summary,
+            "truth_score": truth_score,
             "sources": [s.model_dump() for s in sources],
             "token_usage": total_usage.model_dump(),
         }
@@ -117,6 +119,7 @@ def check(req: CheckRequest, request: Request, authorization: str = Header(defau
         severity_reasoning=severity_result["severity_reasoning"],
         tavily_settings=tavily_settings,
         summary=summary,
+        truth_score=truth_score,
         sources=sources,
         token_usage=total_usage,
         result_id=result_id,
@@ -132,6 +135,10 @@ def render_result_html(result_id: str, data: dict) -> str:
     label = html.escape(SEVERITY_LABELS.get(severity, severity))
     summary = html.escape(data["summary"]).replace("\n", "<br/>")
     reasoning = html.escape(data["severity_reasoning"])
+    truth_score = data.get("truth_score")
+    truth_score_html = (
+        f'<div class="truth-score">Truth score: <strong>{truth_score}%</strong></div>' if truth_score is not None else ""
+    )
 
     sources_html = "".join(
         f"""
@@ -231,12 +238,23 @@ def render_result_html(result_id: str, data: dict) -> str:
   .source a {{ font-weight: 600; color: var(--accent); text-decoration: none; word-break: break-word; }}
   .score {{ font-size: 13px; color: var(--ink-soft); white-space: nowrap; }}
   .excerpt {{ font-size: 15px; color: var(--ink-soft); margin-top: 6px; }}
+  .truth-score {{
+    display: inline-block;
+    margin-top: 10px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 16px;
+    font-weight: 700;
+  }}
 </style>
 </head>
 <body>
   <h1>News Checker Result</h1>
   <span class="badge {severity}">{label}</span>
   <div class="reasoning">{reasoning}</div>
+  {truth_score_html}
   <div class="block">
     <div class="label">Summary</div>
     <div>{summary}</div>
