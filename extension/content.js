@@ -49,10 +49,7 @@ document.addEventListener("mousedown", (e) => {
   if (panel && !panel.contains(e.target) && e.target !== checkButton) removePanel();
 });
 
-function severityLabel(severity) {
-  const map = { low: "Severity: Low", medium: "Severity: Medium", high: "Severity: High" };
-  return map[severity] || severity;
-}
+const SEVERITY_LABELS = { low: "Low severity", medium: "Medium severity", high: "High severity" };
 
 function renderLoadingPanel(rect) {
   removePanel();
@@ -62,8 +59,8 @@ function renderLoadingPanel(rect) {
   panel.style.left = `${window.scrollX + rect.left}px`;
   panel.innerHTML = `
     <button class="nc-close">&times;</button>
-    <h3>Fact-checking...</h3>
-    <div class="nc-loading">Judging severity with LLM and searching with Tavily.</div>
+    <h3>Checking the facts...</h3>
+    <div class="nc-loading"><span class="nc-spinner"></span>Judging severity and searching for sources.</div>
   `;
   panel.querySelector(".nc-close").addEventListener("click", removePanel);
   document.body.appendChild(panel);
@@ -76,35 +73,39 @@ function renderResultPanel(data, rect) {
   panel.style.top = `${window.scrollY + rect.bottom + 6}px`;
   panel.style.left = `${window.scrollX + rect.left}px`;
 
-  const sourcesHtml = data.sources
+  const sourcesHtml = (data.sources || [])
     .map(
       (s) => `
       <div class="nc-source">
-        <span class="nc-score">score ${s.score.toFixed(2)}</span>
-        <a href="${s.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.title || s.url)}</a>
-        <div>${escapeHtml((s.content || "").slice(0, 160))}...</div>
+        <div class="nc-source-top">
+          <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.title || s.url)}</a>
+          <span class="nc-score">match ${Math.round(s.score * 100)}%</span>
+        </div>
+        <div class="nc-source-excerpt">${escapeHtml((s.content || "").slice(0, 160))}...</div>
       </div>`
     )
     .join("");
 
+  const truthScoreHtml =
+    typeof data.truth_score === "number"
+      ? `<div class="nc-truth-score">Truth score: <strong>${data.truth_score}%</strong></div>`
+      : "";
+
   panel.innerHTML = `
     <button class="nc-close">&times;</button>
-    <h3><span class="nc-badge ${data.severity}">${severityLabel(data.severity)}</span></h3>
-    <div>${escapeHtml(data.severity_reasoning)}</div>
-    <div class="nc-settings">
-      <strong>Tavily Settings</strong><br/>
-      search_depth: ${data.tavily_settings.search_depth}<br/>
-      max_results: ${data.tavily_settings.max_results}<br/>
-      score_threshold: ${data.tavily_settings.score_threshold}<br/>
-      Reason: ${escapeHtml(data.tavily_settings.reason)}
+    <h3>News Checker</h3>
+    <span class="nc-badge ${data.severity}">${SEVERITY_LABELS[data.severity] || data.severity}</span>
+    <div class="nc-reasoning">${escapeHtml(data.severity_reasoning)}</div>
+    ${truthScoreHtml}
+    <div class="nc-block">
+      <div class="nc-label">Summary</div>
+      <div>${escapeHtml(data.summary).replace(/\n/g, "<br/>")}</div>
     </div>
-    <div><strong>Summary</strong><br/>${escapeHtml(data.summary).replace(/\n/g, "<br/>")}</div>
-    <div style="margin-top:8px;"><strong>Sources</strong>${sourcesHtml}</div>
-    <div class="nc-settings" style="margin-top:8px;">
-      <strong>Token Usage</strong><br/>
-      prompt: ${data.token_usage.prompt_tokens} / completion: ${data.token_usage.completion_tokens} / total: ${data.token_usage.total_tokens}
+    <div class="nc-block">
+      <div class="nc-label">Sources</div>
+      ${sourcesHtml || '<div class="nc-source-excerpt">No sources were found for this claim.</div>'}
     </div>
-    ${data.result_url ? `<div style="margin-top:8px;"><a href="${escapeHtml(data.result_url)}" target="_blank" rel="noopener noreferrer">View result page</a></div>` : ""}
+    ${data.result_url ? `<a class="nc-result-link" href="${escapeHtml(data.result_url)}" target="_blank" rel="noopener noreferrer">Open full result page &rarr;</a>` : ""}
   `;
   panel.querySelector(".nc-close").addEventListener("click", removePanel);
   document.body.appendChild(panel);
@@ -119,7 +120,7 @@ function renderErrorPanel(message, rect) {
   panel.innerHTML = `
     <button class="nc-close">&times;</button>
     <h3>Error</h3>
-    <div>${escapeHtml(message)}</div>
+    <div class="nc-error">${escapeHtml(message)}</div>
   `;
   panel.querySelector(".nc-close").addEventListener("click", removePanel);
   document.body.appendChild(panel);

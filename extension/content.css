@@ -1,90 +1,170 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap');
+
 #news-checker-btn {
   position: absolute;
   z-index: 2147483647;
-  background: #1a73e8;
+  background: #0f6b5c;
   color: #fff;
   border: none;
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 13px;
-  font-family: -apple-system, sans-serif;
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: "Source Sans 3", -apple-system, sans-serif;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
 }
+#news-checker-btn:hover { opacity: 0.92; }
 
 #news-checker-panel {
   position: absolute;
   z-index: 2147483647;
-  width: 380px;
-  max-height: 480px;
+  width: 400px;
+  max-height: 520px;
   overflow-y: auto;
-  background: #fff;
-  color: #202124;
-  border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-  font-family: -apple-system, sans-serif;
-  font-size: 13px;
-  padding: 14px;
+  background: #faf7f0;
+  color: #1c2321;
+  border: 1px solid #e2dfd3;
+  border-radius: 16px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  font-family: "Source Sans 3", -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 20px;
 }
 
 #news-checker-panel h3 {
-  margin: 0 0 8px;
-  font-size: 15px;
+  margin: 0 0 10px;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 #news-checker-panel .nc-badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 11px;
-  color: #fff;
-  margin-right: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
 }
 
-#news-checker-panel .nc-badge.low { background: #34a853; }
-#news-checker-panel .nc-badge.medium { background: #fbbc04; color: #202124; }
-#news-checker-panel .nc-badge.high { background: #ea4335; }
+#news-checker-panel .nc-badge.low { background: #e5f3e9; color: #1e6b3c; }
+#news-checker-panel .nc-badge.medium { background: #fbecd7; color: #8a5a00; }
+#news-checker-panel .nc-badge.high { background: #fbe4e1; color: #b23223; }
 
-#news-checker-panel .nc-settings {
-  background: #f1f3f4;
-  border-radius: 6px;
-  padding: 8px;
-  margin: 8px 0;
-  font-size: 12px;
-  line-height: 1.5;
+#news-checker-panel .nc-truth-score {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: #e4efe9;
+  color: #0f6b5c;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+#news-checker-panel .nc-reasoning {
+  margin-top: 10px;
+  color: #4b5754;
+  font-size: 14px;
+}
+
+#news-checker-panel .nc-block {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2dfd3;
+}
+
+#news-checker-panel .nc-label {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
 }
 
 #news-checker-panel .nc-source {
-  border-top: 1px solid #eee;
-  padding: 8px 0;
+  border-top: 1px solid #e2dfd3;
+  padding: 12px 0;
+}
+#news-checker-panel .nc-source:first-of-type { border-top: none; padding-top: 0; }
+
+#news-checker-panel .nc-source-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 #news-checker-panel .nc-source a {
-  color: #1a73e8;
+  color: #0f6b5c;
   text-decoration: none;
   font-weight: 600;
+  font-size: 14px;
+  word-break: break-word;
+}
+#news-checker-panel .nc-source a:hover { text-decoration: underline; }
+
+#news-checker-panel .nc-source-excerpt {
+  font-size: 13px;
+  color: #4b5754;
+  margin-top: 4px;
 }
 
 #news-checker-panel .nc-score {
-  float: right;
-  background: #e8eaed;
-  border-radius: 10px;
-  padding: 1px 8px;
-  font-size: 11px;
+  font-size: 12px;
+  color: #4b5754;
+  white-space: nowrap;
+}
+
+#news-checker-panel .nc-result-link {
+  display: block;
+  text-align: center;
+  margin-top: 16px;
+  padding: 12px;
+  color: #0f6b5c;
+  background: #e4efe9;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 12px;
 }
 
 #news-checker-panel .nc-close {
   position: absolute;
-  top: 8px;
-  right: 10px;
+  top: 14px;
+  right: 16px;
   cursor: pointer;
-  color: #5f6368;
-  font-size: 16px;
+  color: #4b5754;
+  font-size: 18px;
   background: none;
   border: none;
+  line-height: 1;
 }
+#news-checker-panel .nc-close:hover { color: #1c2321; }
 
 #news-checker-panel .nc-loading {
-  color: #5f6368;
+  color: #4b5754;
+  display: flex;
+  align-items: center;
+}
+
+#news-checker-panel .nc-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 3px solid #d9e6e2;
+  border-top-color: #0f6b5c;
+  border-radius: 50%;
+  animation: nc-spin 0.8s linear infinite;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+@keyframes nc-spin { to { transform: rotate(360deg); } }
+
+#news-checker-panel .nc-error {
+  color: #b23223;
+  background: #fbe4e1;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
 }
