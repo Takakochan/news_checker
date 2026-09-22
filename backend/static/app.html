@@ -250,6 +250,40 @@
   @media (prefers-reduced-motion: reduce) {
     .spinner { animation: none; }
   }
+
+  .image-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  button#pick-image {
+    flex: 1;
+    padding: 13px;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    border: 2px solid var(--accent);
+    border-radius: 14px;
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+  }
+  button#pick-image:active { background: var(--accent-soft); }
+  button#pick-image:disabled { opacity: 0.55; cursor: default; }
+  #image-input { display: none; }
+
+  .ocr-status {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+  }
+  .ocr-status[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -260,11 +294,19 @@
 
   <label class="field-label" for="text">Text to check</label>
   <textarea id="text" placeholder="Paste or type the sentence you want to check, for example a headline or a claim from a screenshot."></textarea>
+
+  <div class="image-row">
+    <button id="pick-image" type="button">Extract text from a screenshot</button>
+  </div>
+  <input type="file" id="image-input" accept="image/*"/>
+  <div class="ocr-status" id="ocr-status" hidden><span class="spinner"></span><span id="ocr-status-text">Reading text from image...</span></div>
+
   <button id="submit">Check the facts</button>
-  <p class="hint">Tip: on iPhone, select text in a screenshot, copy it, then paste it here.</p>
+  <p class="hint">Tip: tap &ldquo;Extract text from a screenshot&rdquo; and choose a photo, or paste text directly above.</p>
 
   <div id="result"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
 <script>
 const BACKEND_URL = "__BACKEND_URL__";
 const TOKEN = "__DEMO_TOKEN__";
@@ -272,6 +314,10 @@ const TOKEN = "__DEMO_TOKEN__";
 const textEl = document.getElementById("text");
 const submitEl = document.getElementById("submit");
 const resultEl = document.getElementById("result");
+const pickImageEl = document.getElementById("pick-image");
+const imageInputEl = document.getElementById("image-input");
+const ocrStatusEl = document.getElementById("ocr-status");
+const ocrStatusTextEl = document.getElementById("ocr-status-text");
 
 function escapeHtml(str) {
   const div = document.createElement("div");
@@ -341,6 +387,42 @@ function renderResult(data) {
     <a class="result-link" href="${escapeHtml(data.result_url)}" target="_blank" rel="noopener noreferrer">Open full result page &rarr;</a>
   `;
 }
+
+async function runOcr(file) {
+  pickImageEl.disabled = true;
+  ocrStatusEl.hidden = false;
+  ocrStatusTextEl.textContent = "Reading text from image...";
+
+  try {
+    const { data } = await Tesseract.recognize(file, "eng", {
+      logger: (m) => {
+        if (m.status === "recognizing text" && typeof m.progress === "number") {
+          ocrStatusTextEl.textContent = `Reading text from image... ${Math.round(m.progress * 100)}%`;
+        }
+      },
+    });
+    const extracted = (data.text || "").trim();
+    if (!extracted) {
+      ocrStatusTextEl.textContent = "No text found in that image. Try pasting the text instead.";
+      setTimeout(() => { ocrStatusEl.hidden = true; }, 3000);
+      return;
+    }
+    textEl.value = textEl.value ? `${textEl.value}\n${extracted}` : extracted;
+    ocrStatusEl.hidden = true;
+  } catch (err) {
+    ocrStatusTextEl.textContent = "Couldn't read that image. Try pasting the text instead.";
+    setTimeout(() => { ocrStatusEl.hidden = true; }, 3000);
+  } finally {
+    pickImageEl.disabled = false;
+    imageInputEl.value = "";
+  }
+}
+
+pickImageEl.addEventListener("click", () => imageInputEl.click());
+imageInputEl.addEventListener("change", () => {
+  const file = imageInputEl.files && imageInputEl.files[0];
+  if (file) runOcr(file);
+});
 
 submitEl.addEventListener("click", runCheck);
 </script>
