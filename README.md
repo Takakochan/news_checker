@@ -1,31 +1,41 @@
 # News Checker
 
-Webページ上でハイライトしたテキストを、LLMとTavily検索を使ってファクトチェックするChrome拡張機能です。
+LLMとTavily検索を使ってテキストをファクトチェックするサービスです。バックエンド（FastAPI）は本番でRenderに常時デプロイされており、フロントエンドとして次の2つがあります。
+
+- **Chrome拡張機能**: Webページ上でハイライトしたテキストをその場でチェック。**ローカルのバックエンドのみに接続する設定のまま**（後述）
+- **iPhone向けWebアプリ**（`/app`）: 本番バックエンド（Render）に接続。ホーム画面に追加してアプリのように使える。スクリーンショットからのテキスト抽出（OCR）にも対応
 
 ## 仕組み
 
-1. ユーザーがページ上のテキストをハイライトすると「事実確認」ボタンが表示される
-2. ボタンを押すと、ハイライトしたテキストがバックエンドに送られる
-3. LLM（Nebius Token Factory経由）がテキストの**重要度・深刻度**（low / medium / high）を判定
-4. その判定結果に応じて、Tavily検索の設定を動的に変更する
+1. テキストが送られると、LLM（Nebius Token Factory経由）がテキストの**重要度・深刻度**（low / medium / high）を判定
+2. その判定結果に応じて、Tavily検索の設定を動的に変更する
    - 重要度が高い → 深い検索（`advanced`）、多めの検索結果数、低めのスコア閾値
    - 重要度が低い → 軽い検索（`basic`）、少なめの検索結果数、高めのスコア閾値
-5. 決定した設定でTavily検索APIを呼び出し、関連情報源を取得（各結果に関連性スコア0.0〜1.0が付く）
-6. LLMが検索結果を踏まえてファクトチェックの要約を生成
-7. 拡張機能のポップアップに「重要度」「使用したTavily設定とその理由」「要約」「情報源とスコア」を表示
+3. 決定した設定でTavily検索APIを呼び出し、関連情報源を取得（各結果に関連性スコア0.0〜1.0が付く）
+4. LLMが検索結果を踏まえてファクトチェックの要約を生成
+5. 結果をSQLiteに保存し、`result_id` / `result_url`（`/result/{id}`）を含めてレスポンスを返す
+
+## 本番環境
+
+- **バックエンドURL**: `https://news-checker-5a5b.onrender.com`
+- **ホスティング**: Render（無料プラン、Webサービス）
+- **iPhone Webアプリ**: `https://news-checker-5a5b.onrender.com/app`
+- **GitHubリポジトリ**: `Takakochan/news_checker`（private）。`master`ブランチへのpushでRenderが自動デプロイする
 
 ## ディレクトリ構成
 
 ```
 news_checker/
 ├── backend/
-│   ├── main.py           # APIエンドポイント (/check, /result/{id}, /models, /health)
-│   ├── llm.py            # LLM呼び出し（重要度判定・要約生成）
-│   ├── tavily_client.py  # Tavily検索API呼び出し
-│   ├── db.py             # SQLiteへの結果保存・取得
-│   ├── models.py         # リクエスト/レスポンスのPydanticモデル
-│   └── usage_logger.py   # トークン使用量のログ記録
-├── extension/                # Chrome拡張機能 (Manifest V3)
+│   ├── main.py            # APIエンドポイント (/check, /result/{id}, /app, /models, /health)
+│   ├── llm.py              # LLM呼び出し（重要度判定・要約生成）
+│   ├── tavily_client.py    # Tavily検索API呼び出し
+│   ├── db.py                # SQLiteへの結果保存・取得
+│   ├── models.py            # リクエスト/レスポンスのPydanticモデル
+│   ├── usage_logger.py      # トークン使用量のログ記録
+│   └── static/
+│       └── app.html         # iPhone向けWebアプリ（/appで配信、テンプレート変数を実行時に置換）
+├── extension/                # Chrome拡張機能 (Manifest V3)。ローカルバックエンド専用のまま
 │   ├── manifest.json
 │   ├── background.js         # service worker。/checkの実際のfetchはここで行う
 │   ├── config.js             # バックエンドURL・トークンの読み書き（storage.sync）
@@ -33,17 +43,18 @@ news_checker/
 │   ├── content.css
 │   ├── options.html / options.js  # 設定画面（モデル・Tavily設定・バックエンドURL/トークン）
 │   └── popup.html / popup.js
-├── passenger_wsgi.py     # cPanel(Passenger/WSGI)用エントリーポイント。application変数を公開
-├── requirements.txt       # 全パッケージをバージョン固定
-├── .env.example           # 必要な環境変数名の一覧（値は空）
-├── data/                  # SQLite DB置き場（デフォルト。DB_PATHで変更可、Git管理外）
+├── passenger_wsgi.py       # 未使用。cPanel(Passenger)向けに作ったが、mixhostがPython App非対応のため本番はRenderへ移行済み
+├── render.yaml              # Renderのサービス定義（無料プラン、ビルド/起動コマンド）
+├── requirements.txt         # 全パッケージをバージョン固定
+├── .env.example             # 必要な環境変数名の一覧（値は空）
+├── data/                    # SQLite DB置き場（ローカル用。DB_PATHで変更可、Git管理外）
 ├── logs/
-│   └── token_usage.jsonl # LLM呼び出しごとのトークン使用量ログ
-├── venv/                 # ローカル開発用Python仮想環境
-└── .env                  # APIキー等（Git管理外）
+│   └── token_usage.jsonl   # LLM呼び出しごとのトークン使用量ログ
+├── venv/                    # ローカル開発用Python仮想環境
+└── .env                      # APIキー等（Git管理外）
 ```
 
-## セットアップ
+## ローカルセットアップ
 
 ### 1. 仮想環境の有効化
 
@@ -52,7 +63,7 @@ cd /Users/takako/news_checker
 source venv/bin/activate
 ```
 
-すでに以下がインストール済みです: `openai`, `pydantic`, `python-dotenv`, `fastapi`, `uvicorn`
+`requirements.txt` に記載のパッケージがインストール済みです。
 
 ### 2. 環境変数
 
@@ -61,7 +72,7 @@ source venv/bin/activate
 ```
 NEBIUS_API_KEY=（Nebius Token FactoryのAPIキー）
 TAVILY_API_KEY=（TavilyのAPIキー）
-DEMO_TOKEN=（/check の Authorization: Bearer <token> チェックに使う共通トークン）
+DEMO_TOKEN=（/check の Authorization: Bearer <token> チェックに使う共通トークン。ローカル用と本番用で別の値を使っている）
 DB_PATH=（省略可。SQLiteファイルの絶対パス。省略時は data/results.sqlite3）
 ```
 
@@ -86,28 +97,34 @@ curl http://localhost:8787/health
 pkill -f "uvicorn backend.main"
 ```
 
-### 4. Chrome拡張機能の読み込み
+### 4. Chrome拡張機能の読み込み（ローカルバックエンド専用）
 
-1. Chromeで `chrome://extensions` を開く
-2. 右上の「デベロッパーモード」をONにする
-3. 「パッケージ化されていない拡張機能を読み込む」をクリック
-4. `/Users/takako/news_checker/extension` フォルダを選択
-5. 拡張機能の「Open Settings」からBackend URL（バックエンドのベースURL）とBackend Token（`DEMO_TOKEN`と同じ値）を設定して保存
+Chrome拡張機能は**常にローカルのバックエンドを使う設計のまま**です（Renderには向けていません）。使う前に必ず手順3でローカルサーバーを起動しておく必要があります。
 
-以降、任意のWebページでテキストを選択すると「事実確認」ボタンが出ます。
+1. `uvicorn backend.main:app --port 8787` でローカルサーバーを起動しておく
+2. Chromeで `chrome://extensions` を開く
+3. 右上の「デベロッパーモード」をONにする
+4. 「パッケージ化されていない拡張機能を読み込む」をクリック
+5. `/Users/takako/news_checker/extension` フォルダを選択
+6. 拡張機能の「Open Settings」を開き、Backend URLが `http://localhost:8787`、Backend Tokenが `.env` の `DEMO_TOKEN` と同じ値になっていることを確認（デフォルトでlocalhostを向いている）
 
-## 使い方
+以降、任意のWebページでテキストを選択すると「事実確認」ボタンが出ます。ローカルサーバーを止めると拡張機能は動かなくなります。
 
-1. バックエンドサーバーを起動しておく（上記手順3）
-2. 拡張機能の設定でBackend URL / Backend Tokenを設定しておく（上記手順4-5）
-3. 任意のWebページでファクトチェックしたい文章をドラッグして選択
-4. 出てきた「事実確認」ボタンをクリック
-5. ポップアップに以下が表示される
-   - **重要度バッジ**（低・中・高）とその判定理由
-   - **Tavily設定**（search_depth / max_results / score_threshold）とLLMが選んだ理由
-   - **要約**（事実確認の結果）
-   - **情報源一覧**（各情報源のタイトル・関連性スコア・抜粋・リンク）
-   - **結果ページへのリンク**（`/result/{id}`。スマホでも見られるHTMLページ、外部CSS/JSなし）
+Renderの本番バックエンドに向けたい場合は、`extension/manifest.json` の `host_permissions` に本番ドメインを追加した上で、Options画面のBackend URL/Tokenを本番の値に変更する必要があります（未実施）。
+
+## iPhone向けWebアプリの使い方
+
+本番バックエンド（Render）にデプロイ済みなので、ローカルサーバーの起動は不要です。
+
+1. iPhoneのSafariで `https://news-checker-5a5b.onrender.com/app` を開く
+2. 共有ボタン → 「ホーム画面に追加」でアプリのように起動できるようにする
+3. テキストを直接ペーストするか、「Extract text from a screenshot」ボタンで写真ライブラリからスクリーンショットを選ぶ
+   - 画像はブラウザ内で Tesseract.js を使ってOCRされ（サーバーには送られない）、抽出結果がテキスト欄に自動入力される。内容を確認・編集してから送信できる
+   - iOSはWeb Share Target APIを未対応のため、共有シートから直接このアプリを選ぶことはできない。「アプリを開く → 画像を選ぶ」という流れになる
+4. 「Check the facts」をタップすると結果（重要度・要約・情報源）がその場に表示される
+5. 「Open full result page」から `/result/{id}` のページも開ける
+
+Renderの無料プランは一定時間アクセスがないとスリープするため、しばらく使っていないと最初の1回だけ起動に数十秒かかることがある。
 
 ## API概要
 
@@ -120,18 +137,23 @@ pkill -f "uvicorn backend.main"
 
 ### `GET /result/{id}`
 
-- 認証不要。保存済みの結果をスマホ向けレイアウトのHTMLページとして返す（外部CSS/JS読み込みなし）
+- 認証不要。保存済みの結果をスマホ向けレイアウトのHTMLページとして返す（外部CSS/JS読み込みなし、日英ともに英語表記）
 - 存在しないIDは404
+
+### `GET /app`
+
+- 認証不要（ページ自体はログイン不要で開けるが、ページ内から呼ぶ`/check`にはトークンが埋め込まれている）
+- iPhone向けWebアプリのHTMLを返す。`backend/static/app.html` をテンプレートとして、リクエスト時に `__BACKEND_URL__` と `__DEMO_TOKEN__` を環境変数の値に置換して返す。そのためソースコード上にはトークンが残らない
 
 ### `GET /models` / `GET /health`
 
-- 認証不要。モデル一覧とヘルスチェック用（変更なし）
+- 認証不要。モデル一覧とヘルスチェック用
 
-iPhoneのショートカットからも `/check` に同じ形式（JSONボディ + Authorization ヘッダー）でPOSTすれば利用できます。
+iPhoneのショートカットからも `/check` に同じ形式（JSONボディ + Authorization ヘッダー）でPOSTすれば利用できる。
 
 ## トークン使用量ログ
 
-LLM呼び出し（重要度判定・要約生成）のたびに `logs/token_usage.jsonl` に1行ずつ記録されます。
+LLM呼び出し（重要度判定・要約生成）のたびに `logs/token_usage.jsonl` に1行ずつ記録される。
 
 ```json
 {"timestamp": 1789962989.83, "call": "judge_severity", "model": "Qwen/Qwen3-30B-A3B-Instruct-2507", "prompt_tokens": 299, "completion_tokens": 112, "total_tokens": 411}
@@ -143,61 +165,53 @@ LLM呼び出し（重要度判定・要約生成）のたびに `logs/token_usag
 ## 使用しているモデル・API
 
 - **LLM**: Nebius Token Factory（OpenAI互換API） / モデル: `Qwen/Qwen3-30B-A3B-Instruct-2507`
-  - 利用可能なモデル一覧は `client.models.list()` で確認できます
+  - 利用可能なモデル一覧は `client.models.list()` で確認できる
 - **検索**: Tavily Search API（`https://api.tavily.com/search`）
+- **OCR**: Tesseract.js（`/app` ページ内、ブラウザ側で完結。サーバー側の処理は無い）
 
-## 注意点
+## Renderへのデプロイ
 
-- ローカル開発時のバックエンドはデフォルトでポート `8787` を使用します。
-- `.env` はGit管理から除外されています（`.gitignore`参照）。`data/`（SQLite DB）も同様にGit管理外です。
-- 拡張機能のバックエンドURL・トークンは `extension/config.js` 経由で `chrome.storage.sync` に保存され、options画面から設定します。ソースコードにURLやキーはハードコードしていません。
-- `extension/manifest.json` の `host_permissions` には現在プレースホルダー `https://example.com/*` が入っています。cPanelデプロイ後、実際のバックエンドドメインに置き換える必要があります。
+### 経緯
 
-## cPanelへのデプロイ（Setup Python App / Passenger）
+当初はmixhostのcPanelにPassenger/WSGI経由でデプロイする予定で `passenger_wsgi.py` を用意したが、mixhostはSetup Python App機能を提供していないことが判明したため、Renderへ切り替えた（`passenger_wsgi.py` はリポジトリに残っているが未使用）。
 
-### 事前準備
+### Render側の設定
 
-- `requirements.txt`・`passenger_wsgi.py`はリポジトリに含まれている
-- `passenger_wsgi.py` は `a2wsgi.ASGIMiddleware` で `backend.main:app`（FastAPI）を包み、変数名 `application` として公開している
-- ローカルで `python -c "import passenger_wsgi"` がエラーなく通ることを確認済み
-
-### cPanel側の設定（Setup Python App）
+GitHubリポジトリ `Takakochan/news_checker` の `master` ブランチを接続したWeb Serviceとして稼働中。設定内容は `render.yaml` にも記述してあるが、実際のサービスはRenderダッシュボード上で手動フォーム入力して作成した。
 
 | 項目 | 値 |
 |---|---|
-| Application root | リポジトリのルート（`passenger_wsgi.py`がある場所） |
-| Application startup file | `passenger_wsgi.py` |
-| Application Entry point | `application` |
-| Python version | 3.9系（開発環境と合わせる。使えるなら新しめでも可） |
+| Runtime | Python 3 |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `uvicorn backend.main:app --host 0.0.0.0 --port $PORT` |
+| Plan | Free（$0/month） |
 
-デプロイ後、cPanelのvirtualenv内で:
+**注意**: 無料プランはPersistent Diskに対応していないため、デプロイやコンテナの再起動のたびにSQLite（`data/results.sqlite3`）の中身は消える。結果の永続的な保存が必要になったら、有料のStarterプラン以上 + Persistent Diskへの切り替えが必要。
 
-```bash
-pip install -r requirements.txt
-```
-
-### 環境変数（cPanelの Environment variables）
+### 環境変数（Renderダッシュボードの Environment タブ）
 
 | 変数名 | 説明 |
 |---|---|
 | `NEBIUS_API_KEY` | Nebius Token Factory APIキー |
 | `TAVILY_API_KEY` | Tavily APIキー |
-| `DEMO_TOKEN` | `/check` の認証トークン。拡張機能とiPhoneショートカットで共通利用する、推測困難な文字列 |
-| `DB_PATH` | SQLite DBの絶対パス。公開Webルートの外（例: `/home/<user>/private/news_checker/results.sqlite3`）を指定する |
+| `DEMO_TOKEN` | `/check` の認証トークン。本番用に生成したランダムな文字列（ローカルの`.env`とは別の値） |
 
-`.env` ファイル自体はcPanelにアップロードせず、cPanelの環境変数機能側で設定する。
+`DB_PATH` は設定していない（未設定時のデフォルト `data/results.sqlite3` を使用。無料プランではどのみち永続化されないため）。
 
-### デプロイ後の残作業
+### 継続的なデプロイ
 
-- 実際のバックエンドドメインが決まり次第、`extension/manifest.json` の `host_permissions` を `https://example.com/*` から実ドメインに置き換える
-- 拡張機能のoptionsページでBackend URL / Backend Tokenを設定する
+GitHubリポジトリの `master` ブランチにpushすると、Renderが自動的にビルド・デプロイする（Auto-Deploy設定がデフォルトで有効）。手動で再デプロイしたい場合はRenderダッシュボードの「Manual Deploy」から行う。
 
-### 継続的なデプロイ（更新の反映方法）
+## GitHubリポジトリとデプロイ鍵
 
-cPanelでSSHアクセスとGit Version Controlが使えるかどうかで運用方法が変わる（要確認・未確定）。有力な候補:
+- リポジトリ: `Takakochan/news_checker`（private）
+- Render用にGitHub OAuth連携を許可済み（Renderダッシュボードから作成したWeb Service経由）
+- 当初mixhost向けに作成したSSHデプロイ鍵（`news_checker_deploy`、cPanelの「SSH アクセス」で生成）やGitHub Deploy Key、Fine-grained Personal Access Token（"cPanel news_checker deploy (read-only)"）はcPanelデプロイを断念した後も残っている。使う予定がなければcPanel側のSSHキー、GitHub側のDeploy KeyとPATは削除して整理してよい
 
-1. **SSH + git pull**（推奨・最もシンプル）: サーバー上にリポジトリをcloneしておき、更新のたびに `ssh user@host 'cd app && git pull && touch tmp/restart.txt'` を実行する。`tmp/restart.txt` の作成でPassengerアプリが再起動される
-2. **cPanel Git Version Control機能**: cPanel UI上でリポジトリを登録し、「Pull or Deploy」から更新を取り込む
-3. **SSHが使えない場合**: File Manager/FTPで変更ファイルを手動アップロードし、`tmp/restart.txt` を作成して再起動する
+## 注意点
 
-→ SSH/Git機能の有無を確認後、この節に具体的な手順・デプロイスクリプトを追記する。
+- ローカル開発時のバックエンドはデフォルトでポート `8787` を使用する。
+- `.env` はGit管理から除外されている（`.gitignore`参照）。`data/`（SQLite DB）も同様にGit管理外。
+- 拡張機能のバックエンドURL・トークンは `extension/config.js` 経由で `chrome.storage.sync` に保存され、Options画面から設定する。ソースコードにURLやキーはハードコードしていない。
+- `extension/manifest.json` の `host_permissions` には `http://localhost:8787/*` と、未使用のプレースホルダー `https://example.com/*` が入っている。
+- `backend/static/app.html` にはビルド時・コミット時点ではプレースホルダー（`__BACKEND_URL__` / `__DEMO_TOKEN__`）のみが入っており、実際の値は `GET /app` のリクエスト時にサーバー側で環境変数から差し込まれる。
