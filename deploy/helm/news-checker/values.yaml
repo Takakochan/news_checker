@@ -1,0 +1,32 @@
+image:
+  repository: news-checker
+  tag: latest
+  # Image is loaded straight into k3s's containerd (no registry yet), so never try to pull it.
+  pullPolicy: Never
+
+replicaCount: 1
+
+containerPort: 8000
+
+service:
+  port: 80
+  targetPort: 8000
+
+ingress:
+  host: 49.13.129.122.nip.io
+  clusterIssuer: letsencrypt-staging
+  ingressClassName: traefik
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Supplied at install time with --set, never committed with real values.
+secrets:
+  nebiusApiKey: ""
+  tavilyApiKey: ""
+  demoToken: ""

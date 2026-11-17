@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "news-checker.fullname" . }}
+  labels:
+    {{- include "news-checker.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "news-checker.labels" . | nindent 4 }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
