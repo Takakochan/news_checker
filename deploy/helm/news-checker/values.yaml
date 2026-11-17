@@ -15,7 +15,7 @@ service:
 
 ingress:
   host: 49.13.129.122.nip.io
-  clusterIssuer: letsencrypt-staging
+  clusterIssuer: letsencrypt-prod
   ingressClassName: traefik
 
 resources:

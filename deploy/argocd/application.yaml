@@ -18,6 +18,9 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      # Without this, ignoreDifferences only hides the diff in the UI — sync still
+      # pushes the ignored fields and overwrites them. This bit us once already.
+      - RespectIgnoreDifferences=true
   # The Secret's real values are set once by hand (helm --set from .env) and never
   # committed to git, so its rendered manifest here is always empty. Without this,
   # selfHeal would blow the real secret away on every sync.
