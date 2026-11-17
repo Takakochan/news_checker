@@ -1,5 +1,23 @@
 # News Checker
 
+A fact-checking service that uses an LLM and the Tavily search API to verify claims in a piece of text. Built as a personal project; full documentation below is in Japanese, with an English summary here.
+
+## English Summary
+
+**What it does**: paste or highlight any text (a news snippet, a social media post, a rumor) and the service judges how serious/sensitive the claim is, searches the web for supporting or contradicting sources via Tavily, and has an LLM summarize the findings and assign two scores: a **severity** level (low/medium/high) and a **truth score** (0–100%) estimating how well the specific claims in the text are actually corroborated by the retrieved sources (not just whether the topic is being reported at all — see "Truth score" section below for a bug I found and fixed in this distinction).
+
+**Two frontends**:
+- A **Chrome extension** (Manifest V3) — highlight text on any webpage and check it on the spot. Currently wired to a local backend only.
+- An **iPhone-friendly web app** (`/app`) — deployed against the production backend on Render, installable to the home screen, and supports extracting text from a pasted screenshot via in-browser OCR (Tesseract.js, no image ever leaves the device).
+
+**Backend**: FastAPI + SQLite, deployed on Render (free tier). The backend dynamically adjusts how deep the Tavily search goes (basic vs. advanced, number of results, score threshold) based on the LLM's severity judgment, then re-prompts the LLM with the retrieved sources to produce the summary and truth score. Every LLM call's token usage is logged to `logs/token_usage.jsonl`.
+
+**Stack**: Python (FastAPI, Pydantic), SQLite, Nebius Token Factory (OpenAI-compatible LLM API, model `Qwen/Qwen3-30B-A3B-Instruct-2507`), Tavily Search API, vanilla JS Chrome extension, Tesseract.js for client-side OCR.
+
+**Notable bug fix** (see the "Truth scoreの既知の問題と修正履歴" section for details): the truth score originally conflated "sources report this topic exists" with "the specific claim in the text is verified," which let unverified/speculative claims score as high as 95%. Fixed by rewriting the scoring prompt to explicitly separate those two questions.
+
+---
+
 LLMとTavily検索を使ってテキストをファクトチェックするサービスです。バックエンド（FastAPI）は本番でRenderに常時デプロイされており、フロントエンドとして次の2つがあります。
 
 - **Chrome拡張機能**: Webページ上でハイライトしたテキストをその場でチェック。**ローカルのバックエンドのみに接続する設定のまま**（後述）
@@ -23,7 +41,7 @@ LLMとTavily検索を使ってテキストをファクトチェックするサ�
 - **バックエンドURL**: `https://news-checker-5a5b.onrender.com`
 - **ホスティング**: Render（無料プラン、Webサービス）
 - **iPhone Webアプリ**: `https://news-checker-5a5b.onrender.com/app`
-- **GitHubリポジトリ**: `Takakochan/news_checker`（private）。`master`ブランチへのpushでRenderが自動デプロイする
+- **GitHubリポジトリ**: `Takakochan/news_checker`（public）。`master`ブランチへのpushでRenderが自動デプロイする
 
 ## ディレクトリ構成
 
@@ -62,7 +80,7 @@ news_checker/
 ### 1. 仮想環境の有効化
 
 ```bash
-cd /Users/takako/news_checker
+cd news_checker
 source venv/bin/activate
 ```
 
@@ -82,7 +100,7 @@ DB_PATH=（省略可。SQLiteファイルの絶対パス。省略時は data/res
 ### 3. バックエンドサーバーの起動
 
 ```bash
-cd /Users/takako/news_checker
+cd news_checker
 source venv/bin/activate
 uvicorn backend.main:app --port 8787
 ```
@@ -108,7 +126,7 @@ Chrome拡張機能は**常にローカルのバックエンドを使う設計の
 2. Chromeで `chrome://extensions` を開く
 3. 右上の「デベロッパーモード」をONにする
 4. 「パッケージ化されていない拡張機能を読み込む」をクリック
-5. `/Users/takako/news_checker/extension` フォルダを選択
+5. リポジトリの `extension` フォルダを選択
 6. 拡張機能の「Open Settings」を開き、Backend URLが `http://localhost:8787`、Backend Tokenが `.env` の `DEMO_TOKEN` と同じ値になっていることを確認（デフォルトでlocalhostを向いている）
 
 以降、任意のWebページでテキストを選択すると「事実確認」ボタンが出ます。ローカルサーバーを止めると拡張機能は動かなくなります。
@@ -208,9 +226,9 @@ GitHubリポジトリの `master` ブランチにpushすると、Renderが自動
 
 ## GitHubリポジトリとデプロイ鍵
 
-- リポジトリ: `Takakochan/news_checker`（private）
+- リポジトリ: `Takakochan/news_checker`（public）
 - Render用にGitHub OAuth連携を許可済み（Renderダッシュボードから作成したWeb Service経由）
-- 当初mixhost向けに作成したSSHデプロイ鍵（`news_checker_deploy`、cPanelの「SSH アクセス」で生成）やGitHub Deploy Key、Fine-grained Personal Access Token（"cPanel news_checker deploy (read-only)"）はcPanelデプロイを断念した後も残っている。使う予定がなければcPanel側のSSHキー、GitHub側のDeploy KeyとPATは削除して整理してよい
+- 当初mixhost向けに作成したSSHデプロイ鍵やGitHub Deploy Key、Fine-grained Personal Access Tokenは、cPanelデプロイを断念した後に整理済み（未使用のGitHub Deploy Keyは削除済み）
 
 ## Truth scoreの既知の問題と修正履歴
 
