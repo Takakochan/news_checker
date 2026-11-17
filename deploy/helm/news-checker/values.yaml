@@ -1,8 +1,9 @@
 image:
-  repository: news-checker
+  repository: ghcr.io/takakochan/news-checker
   tag: latest
-  # Image is loaded straight into k3s's containerd (no registry yet), so never try to pull it.
-  pullPolicy: Never
+  # "latest" is a mutable tag, so the kubelet must re-check the registry every time
+  # (otherwise it keeps serving whatever it cached under that tag forever).
+  pullPolicy: Always
 
 replicaCount: 1
 
