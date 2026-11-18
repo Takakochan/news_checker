@@ -240,6 +240,74 @@ GitHubリポジトリの `master` ブランチにpushすると、Renderが自動
 
 なお `judge_severity` と `summarize_fact_check` のプロンプト・ロジックは、ユーザーからの要望により変更していない。`truth_score` は別関数 `score_truth` として独立させてある。
 
+## Kubernetes運用（SRE学習用インフラ）
+
+Renderの本番とは別に、`infra/`・`deploy/`配下に、同じアプリをHetzner Cloud + k3s上でTerraform→Ansible→Helm→GitOps(Argo CD)→監視という構成で動かす学習用インフラが入っている。Renderの運用には影響しない。
+
+- `infra/terraform/`: Hetzner VM + ファイアウォールの定義
+- `infra/ansible/`: VMの初期設定（`deploy`ユーザー、SSH鍵認証限定、ufw、自動更新、k3s）
+- `deploy/helm/news-checker/`: アプリのHelm chart（Deployment/Service/Ingress/Secret）
+- `deploy/cert-manager/`: Let's Encrypt用のClusterIssuer
+- `deploy/argocd/`: Argo CDのApplication定義（GitOpsでこのリポジトリを自動sync）
+- `deploy/monitoring/`: kube-prometheus-stackの values とアラートルール
+
+公開URL: `https://49.13.129.122.nip.io`（IPアドレスは変わる可能性がある。実際の値は`terraform output`で確認）
+
+### Runbook（よくある操作・障害対応）
+
+**VMにSSH接続する**
+```bash
+ssh deploy@<server_ipv4>
+```
+`root`では接続できない（`PermitRootLogin no`）。`deploy`ユーザーはNOPASSWDでsudo可能。
+
+**クラスタの状態をざっくり確認する**
+```bash
+ssh deploy@<ip> "sudo k3s kubectl get pods -A | grep -v Running | grep -v Completed"
+```
+何も出なければ異常Podなし。
+
+**kubectl/helmを使う（kubeconfigがroot専有のため）**
+```bash
+ssh deploy@<ip> "sudo k3s kubectl get nodes"
+ssh deploy@<ip> "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm list -A"
+```
+
+**Argo CDの同期状態を確認する**
+```bash
+ssh deploy@<ip> "sudo k3s kubectl get application news-checker -n argocd -o jsonpath='{.status.sync.status} {.status.health.status}'"
+```
+`Synced`/`Healthy`以外なら、まずGitの最新commitとズレていないか（`.status.sync.revision`）を見る。
+
+**アラートの発火状況を確認する**
+```bash
+curl -s https://alertmanager.<ip>.nip.io/api/v2/alerts | python3 -m json.tool
+```
+
+**クラスタへの変更は必ずGitの変更として行う**
+VM上で直接`kubectl edit`や`helm upgrade --set`をしても、Argo CDの`selfHeal`が次の同期で必ずGitの状態に戻す。変更したいなら、該当する`deploy/helm/news-checker/values.yaml`等をコミット・pushする。
+
+### 既知の障害とその対処
+
+| 症状 | 原因 | 対処 |
+|---|---|---|
+| HTTPS証明書が`unable to get local issuer certificate`になる | `letsencrypt-staging`発行者を使っている（テスト用、信頼されないルート） | `values.yaml`の`ingress.clusterIssuer`を`letsencrypt-prod`にしてpush |
+| 証明書発行が`Timeout during connect`で失敗 | Hetznerのクラウドファイアウォールで80/443が塞がれている（`ufw`だけ開けても届かない） | `infra/terraform/main.tf`の`hcloud_firewall`に80/443のルールがあるか確認し、`terraform apply` |
+| SecretのAPIキーが急に空になる・`/check`が401/500になる | Argo CDの`sync`が`ignoreDifferences`対象のSecretを上書きした（`RespectIgnoreDifferences=true`が無いと表示上の無視だけで実際の適用には効かない） | `deploy/argocd/application.yaml`の`syncOptions`に`RespectIgnoreDifferences=true`があるか確認。値は`helm upgrade --set secrets.xxx=...`で復旧 |
+| VM上で直接直した設定（ClusterIssuer・レプリカ数など）が勝手に元に戻る | Argo CDの`selfHeal`がGitの状態に戻している | Gitの値そのものを直してpushする（上記「クラスタへの変更は必ずGitの変更として行う」参照） |
+| `kube-prometheus-stack`導入後にload averageが急騰し、APIサーバーが応答しなくなる | VMの容量不足（cx23=2vCPU/4GBではフルの監視スタックは入らない） | `helm uninstall kube-prometheus-stack -n monitoring`で緊急停止、VMを`cx33`以上にリサイズ（`infra/terraform/variables.tf`の`server_type`） |
+| ArgoCDの`ApplicationSet`コントローラーがCrashLoopBackOff、ログに`no matches for kind "ApplicationSet"` | 高負荷時にCRD自体がクラスタから失われた | `kubectl apply --server-side --force-conflicts -f <argocdのinstall.yaml>`で再適用（CRDが大きく通常の`apply`は256KiBのannotation上限に引っかかるため`--server-side`が必要） |
+| Grafanaに繋がらない（タイムアウト、ログに`Handler timeout`） | Grafana 13系の内部APIレイヤーの既知の不具合（リソース不足ではない） | Alertmanager/Prometheus自体は別物なので実害は小さい。直すなら`deploy/monitoring/values.yaml`で`grafana.image.tag`を安定版に固定 |
+
+### 全部壊して作り直す／止める
+
+```bash
+cd infra/terraform
+terraform destroy   # VM・ファイアウォール・SSH鍵を全部削除、課金が止まる
+```
+
+再構築する場合は `terraform apply` → Ansible playbook実行 → Helmでcert-manager/Argo CD/監視スタックを入れ直す → `deploy/argocd/application.yaml`を適用、の順。すべてコードになっているので手順通りにやれば同じ状態に戻せる。
+
 ## 注意点
 
 - ローカル開発時のバックエンドはデフォルトでポート `8787` を使用する。
