@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: news-checker-alerts
+  namespace: default
+spec:
+  groups:
+    - name: news-checker
+      rules:
+        - alert: NewsCheckerReplicasUnavailable
+          expr: |
+            kube_deployment_status_replicas_available{namespace="default", deployment="news-checker-news-checker"}
+            < kube_deployment_spec_replicas{namespace="default", deployment="news-checker-news-checker"}
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "news-checker has fewer available replicas than desired"
+            description: "Deployment news-checker-news-checker in namespace default has had fewer available replicas than desired for more than 1 minute."
