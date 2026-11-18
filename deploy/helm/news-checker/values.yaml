@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/takakochan/news-checker
-  tag: does-not-exist # TEMP: alert-firing drill, step 6. Revert to "latest" after confirming NewsCheckerReplicasUnavailable fires.
+  tag: latest
   # "latest" is a mutable tag, so the kubelet must re-check the registry every time
   # (otherwise it keeps serving whatever it cached under that tag forever).
   pullPolicy: Always
