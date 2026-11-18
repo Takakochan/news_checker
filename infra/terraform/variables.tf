@@ -13,7 +13,7 @@ variable "location" {
 variable "server_type" {
   description = "Hetzner Cloud server type."
   type        = string
-  default     = "cx23"
+  default     = "cx33"
 }
 
 variable "ssh_public_key_path" {
